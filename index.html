@@ -24,6 +24,953 @@ import {
   Tooltip, 
   Legend, 
   ResponsiveContainer,
+  BarChart,
+  Bar
+} from "recharts";
+import { 
+  Users, 
+  Shield, 
+  Clock, 
+  Play, 
+  Home, 
+  Search, 
+  Menu, 
+  User, 
+  Settings, 
+  Bell, 
+  Calendar,
+  Star,
+  Upload,
+  Download,
+  Trash,
+  Edit,
+  Plus,
+  Minus,
+  Check,
+  X,
+  ArrowRight
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+// Types
+type UserRole = 'ADMIN' | 'OPERATION' | 'TECHNICAL' | 'VIEWER';
+type PlantStatus = 'operational' | 'warning' | 'critical' | 'offline';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  lastLogin: string;
+}
+
+interface Plant {
+  id: string;
+  name: string;
+  location: string;
+  capacity: number; // in MW
+  status: PlantStatus;
+  lastUpdated: string;
+}
+
+interface EnergyDataPoint {
+  time: string;
+  power: number;
+  irradiance: number;
+  temperature: number;
+  windSpeed: number;
+}
+
+interface KPI {
+  name: string;
+  value: number;
+  unit: string;
+  change: number;
+  icon: React.ReactNode;
+}
+
+interface Alert {
+  id: string;
+  type: 'warning' | 'critical' | 'info';
+  title: string;
+  description: string;
+  time: string;
+  plantId: string;
+}
+
+// Mock data
+const mockUsers: User[] = [
+  { id: '1', name: 'John Admin', email: 'john@admin.com', role: 'ADMIN', lastLogin: '2023-05-15 14:30' },
+  { id: '2', name: 'Sarah Operator', email: 'sarah@operation.com', role: 'OPERATION', lastLogin: '2023-05-15 10:15' },
+  { id: '3', name: 'Mike Technician', email: 'mike@technical.com', role: 'TECHNICAL', lastLogin: '2023-05-14 16:45' },
+  { id: '4', name: 'Alex Viewer', email: 'alex@viewer.com', role: 'VIEWER', lastLogin: '2023-05-15 09:20' },
+];
+
+const mockPlants: Plant[] = [
+  { id: '1', name: 'Solar Farm Alpha', location: 'California', capacity: 50, status: 'operational', lastUpdated: '2023-05-15 15:30' },
+  { id: '2', name: 'Solar Farm Beta', location: 'Nevada', capacity: 75, status: 'warning', lastUpdated: '2023-05-15 15:25' },
+  { id: '3', name: 'Solar Farm Gamma', location: 'Arizona', capacity: 100, status: 'operational', lastUpdated: '2023-05-15 15:35' },
+  { id: '4', name: 'Solar Farm Delta', location: 'Texas', capacity: 120, status: 'critical', lastUpdated: '2023-05-15 15:10' },
+];
+
+const mockEnergyData: EnergyDataPoint[] = [
+  { time: '06:00', power: 0, irradiance: 0, temperature: 15, windSpeed: 3 },
+  { time: '08:00', power: 15, irradiance: 200, temperature: 18, windSpeed: 4 },
+  { time: '10:00', power: 45, irradiance: 600, temperature: 22, windSpeed: 5 },
+  { time: '12:00', power: 75, irradiance: 900, temperature: 28, windSpeed: 6 },
+  { time: '14:00', power: 90, irradiance: 1000, temperature: 32, windSpeed: 7 },
+  { time: '16:00', power: 60, irradiance: 700, temperature: 30, windSpeed: 6 },
+  { time: '18:00', power: 15, irradiance: 200, temperature: 25, windSpeed: 4 },
+  { time: '20:00', power: 0, irradiance: 0, temperature: 20, windSpeed: 3 },
+];
+
+const mockKPIs: KPI[] = [
+  { name: 'Capacity Utilization Factor', value: 18.5, unit: '%', change: 2.3, icon: <Star className="h-5 w-5" /> },
+  { name: 'Performance Ratio', value: 82.4, unit: '%', change: -1.2, icon: <Play className="h-5 w-5" /> },
+  { name: 'Availability', value: 98.7, unit: '%', change: 0.5, icon: <Clock className="h-5 w-5" /> },
+  { name: 'Grid Uptime', value: 99.9, unit: '%', change: 0.1, icon: <Shield className="h-5 w-5" /> },
+];
+
+const mockAlerts: Alert[] = [
+  { id: '1', type: 'warning', title: 'Inverter Performance Drop', description: 'Inverter INV-04 showing 15% below expected performance', time: '15:22', plantId: '2' },
+  { id: '2', type: 'critical', title: 'Grid Connection Lost', description: 'Plant Gamma lost grid connection for 12 minutes', time: '14:45', plantId: '3' },
+  { id: '3', type: 'info', title: 'Maintenance Scheduled', description: 'Routine maintenance for Plant Alpha next week', time: '10:30', plantId: '1' },
+];
+
+const JakSolarHeartDashboard = () => {
+  const [currentUser, setCurrentUser] = useState<User>(mockUsers[0]);
+  const [selectedPlant, setSelectedPlant] = useState<string>('all');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [notifications, setNotifications] = useState<Alert[]>(mockAlerts);
+
+  // Filter plants based on selection
+  const filteredPlants = selectedPlant === 'all' 
+    ? mockPlants 
+    : mockPlants.filter(plant => plant.id === selectedPlant);
+
+  // Filter energy data for selected plant
+  const plantEnergyData = selectedPlant === 'all' 
+    ? mockEnergyData 
+    : mockEnergyData.map(point => ({ ...point, power: point.power * 0.8 })); // Simulate different plant data
+
+  // Handle notification dismissal
+  const dismissNotification = (id: string) => {
+    setNotifications(notifications.filter(alert => alert.id !== id));
+  };
+
+  // Simulate real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // In a real app, this would fetch new data
+      console.log('Fetching real-time data...');
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className={`bg-white shadow-md transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-500 rounded-lg p-2">
+              <Sun className="h-6 w-6 text-white" />
+            </div>
+            {sidebarOpen && (
+              <h1 className="text-xl font-bold text-gray-800">Jak Solar Heart</h1>
+            )}
+          </div>
+        </div>
+        
+        <nav className="p-4">
+          <ul className="space-y-2">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" /> },
+              { id: 'plants', label: 'Plants', icon: <Play className="h-5 w-5" /> },
+              { id: 'analytics', label: 'Analytics', icon: <BarChart className="h-5 w-5" /> },
+              { id: 'reports', label: 'Reports', icon: <Upload className="h-5 w-5" /> },
+              { id: 'users', label: 'Users', icon: <Users className="h-5 w-5" /> },
+              { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
+            ].map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center w-full p-3 rounded-lg transition-colors ${
+                    activeTab === item.id 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {item.icon}
+                  {sidebarOpen && <span className="ml-3">{item.label}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        
+        <div className="absolute bottom-0 w-full p-4 border-t">
+          <div className="flex items-center">
+            <Avatar>
+              <AvatarImage src="https://github.com/shadcn.png" />
+              <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            {sidebarOpen && (
+              <div className="ml-3">
+                <p className="text-sm font-medium">{currentUser.name}</p>
+                <p className="text-xs text-gray-500">{currentUser.role}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center">
+              <button 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h2 className="ml-4 text-xl font-semibold text-gray-800 capitalize">
+                {activeTab} {activeTab === 'dashboard' && 'Overview'}
+              </h2>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Bell className="h-6 w-6 text-gray-600" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {notifications.length}
+                  </span>
+                )}
+              </div>
+              
+              <Select value={selectedPlant} onValueChange={setSelectedPlant}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Plant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plants</SelectItem>
+                  {mockPlants.map(plant => (
+                    <SelectItem key={plant.id} value={plant.id}>
+                      {plant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {mockKPIs.map((kpi, index) => (
+              <Card key={index} className="border-l-4 border-l-green-500">
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center">
+                    {kpi.icon}
+                    <span className="ml-2">{kpi.name}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {kpi.value}
+                    <span className="text-lg text-gray-500 ml-1">{kpi.unit}</span>
+                  </div>
+                  <p className={`text-sm mt-1 ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change)}% from yesterday
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Power Generation Chart */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Real-Time Power Generation</CardTitle>
+                <CardDescription>Current power output across all plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="power" 
+                        stroke="#10B981" 
+                        strokeWidth={2} 
+                        activeDot={{ r: 8 }} 
+                        name="Power (MW)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Weather Conditions */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Environmental Conditions</CardTitle>
+                <CardDescription>Current weather data for selected plant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar 
+                        yAxisId="left"
+                        dataKey="irradiance" 
+                        fill="#F59E0B" 
+                        name="Irradiance (W/m²)"
+                      />
+                      <Bar 
+                        yAxisId="right"
+                        dataKey="temperature" 
+                        fill="#3B82F6" 
+                        name="Temperature (°C)"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Plant Status and Alerts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Plant Status */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Plant Status Overview</CardTitle>
+                <CardDescription>Current operational status of all solar plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredPlants.map(plant => (
+                    <div 
+                      key={plant.id} 
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center">
+                        <div className={`h-3 w-3 rounded-full mr-3 ${
+                          plant.status === 'operational' ? 'bg-green-500' :
+                          plant.status === 'warning' ? 'bg-yellow-500' :
+                          plant.status === 'critical' ? 'bg-red-500' : 'bg-gray-500'
+                        }`}></div>
+                        <div>
+                          <h3 className="font-medium">{plant.name}</h3>
+                          <p className="text-sm text-gray-500">{plant.location} • {plant.capacity} MW</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium capitalize">{plant.status}</p>
+                        <p className="text-xs text-gray-500">Updated: {plant.lastUpdated}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Alerts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>System Alerts</CardTitle>
+                <CardDescription>Recent notifications and warnings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {notifications.map(alert => (
+                    <div 
+                      key={alert.id} 
+                      className={`p-4 rounded-lg border-l-4 ${
+                        alert.type === 'warning' ? 'border-l-yellow-500 bg-yellow-50' :
+                        alert.type === 'critical' ? 'border-l-red-500 bg-red-50' :
+                        'border-l-blue-500 bg-blue-50'
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <h3 className="font-medium">{alert.title}</h3>
+                        <button 
+                          onClick={() => dismissNotification(alert.id)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-sm mt-1">{alert.description}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-500">{alert.time}</span>
+                        <span className="text-xs font-medium">
+                          {mockPlants.find(p => p.id === alert.plantId)?.name}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {notifications.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Check className="h-12 w-12 mx-auto text-green-500" />
+                      <p className="mt-2">No active alerts</p>
+                      <p className="text-sm">All systems operating normally</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+// Sun icon component
+const Sun = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
+// BarChart icon component
+const BarChart = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+export default JakSolarHeartDashboard;
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  BarChart as RechartsBarChart,
+  Bar
+} from "recharts";
+import { 
+  Users, 
+  Shield, 
+  Clock, 
+  Play, 
+  Home, 
+  Search, 
+  Menu, 
+  User, 
+  Settings, 
+  Bell, 
+  Calendar,
+  Star,
+  Upload,
+  Download,
+  Trash,
+  Edit,
+  Plus,
+  Minus,
+  Check,
+  X,
+  ArrowRight
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+// Types
+type UserRole = 'ADMIN' | 'OPERATION' | 'TECHNICAL' | 'VIEWER';
+type PlantStatus = 'operational' | 'warning' | 'critical' | 'offline';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  lastLogin: string;
+}
+
+interface Plant {
+  id: string;
+  name: string;
+  location: string;
+  capacity: number; // in MW
+  status: PlantStatus;
+  lastUpdated: string;
+}
+
+interface EnergyDataPoint {
+  time: string;
+  power: number;
+  irradiance: number;
+  temperature: number;
+  windSpeed: number;
+}
+
+interface KPI {
+  name: string;
+  value: number;
+  unit: string;
+  change: number;
+  icon: React.ReactNode;
+}
+
+interface Alert {
+  id: string;
+  type: 'warning' | 'critical' | 'info';
+  title: string;
+  description: string;
+  time: string;
+  plantId: string;
+}
+
+// Mock data
+const mockUsers: User[] = [
+  { id: '1', name: 'John Admin', email: 'john@admin.com', role: 'ADMIN', lastLogin: '2023-05-15 14:30' },
+  { id: '2', name: 'Sarah Operator', email: 'sarah@operation.com', role: 'OPERATION', lastLogin: '2023-05-15 10:15' },
+  { id: '3', name: 'Mike Technician', email: 'mike@technical.com', role: 'TECHNICAL', lastLogin: '2023-05-15 16:45' },
+  { id: '4', name: 'Alex Viewer', email: 'alex@viewer.com', role: 'VIEWER', lastLogin: '2023-05-15 09:20' },
+];
+
+const mockPlants: Plant[] = [
+  { id: '1', name: 'Solar Farm Alpha', location: 'California', capacity: 50, status: 'operational', lastUpdated: '2023-05-15 15:30' },
+  { id: '2', name: 'Solar Farm Beta', location: 'Nevada', capacity: 75, status: 'warning', lastUpdated: '2023-05-15 15:25' },
+  { id: '3', name: 'Solar Farm Gamma', location: 'Arizona', capacity: 100, status: 'operational', lastUpdated: '2023-05-15 15:35' },
+  { id: '4', name: 'Solar Farm Delta', location: 'Texas', capacity: 120, status: 'critical', lastUpdated: '2023-05-15 15:10' },
+];
+
+const mockEnergyData: EnergyDataPoint[] = [
+  { time: '06:00', power: 0, irradiance: 0, temperature: 15, windSpeed: 3 },
+  { time: '08:00', power: 15, irradiance: 200, temperature: 18, windSpeed: 4 },
+  { time: '10:00', power: 45, irradiance: 600, temperature: 22, windSpeed: 5 },
+  { time: '12:00', power: 75, irradiance: 900, temperature: 28, windSpeed: 6 },
+  { time: '14:00', power: 90, irradiance: 1000, temperature: 32, windSpeed: 7 },
+  { time: '16:00', power: 60, irradiance: 700, temperature: 30, windSpeed: 6 },
+  { time: '18:00', power: 15, irradiance: 200, temperature: 25, windSpeed: 4 },
+  { time: '20:00', power: 0, irradiance: 0, temperature: 20, windSpeed: 3 },
+];
+
+const mockKPIs: KPI[] = [
+  { name: 'Capacity Utilization Factor', value: 18.5, unit: '%', change: 2.3, icon: <Star className="h-5 w-5" /> },
+  { name: 'Performance Ratio', value: 82.4, unit: '%', change: -1.2, icon: <Play className="h-5 w-5" /> },
+  { name: 'Availability', value: 98.7, unit: '%', change: 0.5, icon: <Clock className="h-5 w-5" /> },
+  { name: 'Grid Uptime', value: 99.9, unit: '%', change: 0.1, icon: <Shield className="h-5 w-5" /> },
+];
+
+const mockAlerts: Alert[] = [
+  { id: '1', type: 'warning', title: 'Inverter Performance Drop', description: 'Inverter INV-04 showing 15% below expected performance', time: '15:22', plantId: '2' },
+  { id: '2', type: 'critical', title: 'Grid Connection Lost', description: 'Plant Gamma lost grid connection for 12 minutes', time: '14:45', plantId: '3' },
+  { id: '3', type: 'info', title: 'Maintenance Scheduled', description: 'Routine maintenance for Plant Alpha next week', time: '10:30', plantId: '1' },
+];
+
+const JakSolarHeartDashboard = () => {
+  const [currentUser, setCurrentUser] = useState<User>(mockUsers[0]);
+  const [selectedPlant, setSelectedPlant] = useState<string>('all');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [notifications, setNotifications] = useState<Alert[]>(mockAlerts);
+
+  // Filter plants based on selection
+  const filteredPlants = selectedPlant === 'all' 
+    ? mockPlants 
+    : mockPlants.filter(plant => plant.id === selectedPlant);
+
+  // Filter energy data for selected plant
+  const plantEnergyData = selectedPlant === 'all' 
+    ? mockEnergyData 
+    : mockEnergyData.map(point => ({ ...point, power: point.power * 0.8 })); // Simulate different plant data
+
+  // Handle notification dismissal
+  const dismissNotification = (id: string) => {
+    setNotifications(notifications.filter(alert => alert.id !== id));
+  };
+
+  // Simulate real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // In a real app, this would fetch new data
+      console.log('Fetching real-time data...');
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className={`bg-white shadow-md transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-500 rounded-lg p-2">
+              <SunIcon className="h-6 w-6 text-white" />
+            </div>
+            {sidebarOpen && (
+              <h1 className="text-xl font-bold text-gray-800">Jak Solar Heart</h1>
+            )}
+          </div>
+        </div>
+        
+        <nav className="p-4">
+          <ul className="space-y-2">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" /> },
+              { id: 'plants', label: 'Plants', icon: <Play className="h-5 w-5" /> },
+              { id: 'analytics', label: 'Analytics', icon: <BarChartIcon className="h-5 w-5" /> },
+              { id: 'reports', label: 'Reports', icon: <Upload className="h-5 w-5" /> },
+              { id: 'users', label: 'Users', icon: <Users className="h-5 w-5" /> },
+              { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
+            ].map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center w-full p-3 rounded-lg transition-colors ${
+                    activeTab === item.id 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {item.icon}
+                  {sidebarOpen && <span className="ml-3">{item.label}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        
+        <div className="absolute bottom-0 w-full p-4 border-t">
+          <div className="flex items-center">
+            <Avatar>
+              <AvatarImage src="https://github.com/shadcn.png" />
+              <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            {sidebarOpen && (
+              <div className="ml-3">
+                <p className="text-sm font-medium">{currentUser.name}</p>
+                <p className="text-xs text-gray-500">{currentUser.role}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center">
+              <button 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h2 className="ml-4 text-xl font-semibold text-gray-800 capitalize">
+                {activeTab} {activeTab === 'dashboard' && 'Overview'}
+              </h2>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Bell className="h-6 w-6 text-gray-600" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {notifications.length}
+                  </span>
+                )}
+              </div>
+              
+              <Select value={selectedPlant} onValueChange={setSelectedPlant}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Plant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plants</SelectItem>
+                  {mockPlants.map(plant => (
+                    <SelectItem key={plant.id} value={plant.id}>
+                      {plant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {mockKPIs.map((kpi, index) => (
+              <Card key={index} className="border-l-4 border-l-green-500">
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center">
+                    {kpi.icon}
+                    <span className="ml-2">{kpi.name}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {kpi.value}
+                    <span className="text-lg text-gray-500 ml-1">{kpi.unit}</span>
+                  </div>
+                  <p className={`text-sm mt-1 ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change)}% from yesterday
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Power Generation Chart */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Real-Time Power Generation</CardTitle>
+                <CardDescription>Current power output across all plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="power" 
+                        stroke="#10B981" 
+                        strokeWidth={2} 
+                        activeDot={{ r: 8 }} 
+                        name="Power (MW)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Weather Conditions */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Environmental Conditions</CardTitle>
+                <CardDescription>Current weather data for selected plant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar 
+                        yAxisId="left"
+                        dataKey="irradiance" 
+                        fill="#F59E0B" 
+                        name="Irradiance (W/m²)"
+                      />
+                      <Bar 
+                        yAxisId="right"
+                        dataKey="temperature" 
+                        fill="#3B82F6" 
+                        name="Temperature (°C)"
+                      />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Plant Status and Alerts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Plant Status */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Plant Status Overview</CardTitle>
+                <CardDescription>Current operational status of all solar plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredPlants.map(plant => (
+                    <div 
+                      key={plant.id} 
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center">
+                        <div className={`h-3 w-3 rounded-full mr-3 ${
+                          plant.status === 'operational' ? 'bg-green-500' :
+                          plant.status === 'warning' ? 'bg-yellow-500' :
+                          plant.status === 'critical' ? 'bg-red-500' : 'bg-gray-500'
+                        }`}></div>
+                        <div>
+                          <h3 className="font-medium">{plant.name}</h3>
+                          <p className="text-sm text-gray-500">{plant.location} • {plant.capacity} MW</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium capitalize">{plant.status}</p>
+                        <p className="text-xs text-gray-500">Updated: {plant.lastUpdated}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Alerts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>System Alerts</CardTitle>
+                <CardDescription>Recent notifications and warnings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {notifications.map(alert => (
+                    <div 
+                      key={alert.id} 
+                      className={`p-4 rounded-lg border-l-4 ${
+                        alert.type === 'warning' ? 'border-l-yellow-500 bg-yellow-50' :
+                        alert.type === 'critical' ? 'border-l-red-500 bg-red-50' :
+                        'border-l-blue-500 bg-blue-50'
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <h3 className="font-medium">{alert.title}</h3>
+                        <button 
+                          onClick={() => dismissNotification(alert.id)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-sm mt-1">{alert.description}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-500">{alert.time}</span>
+                        <span className="text-xs font-medium">
+                          {mockPlants.find(p => p.id === alert.plantId)?.name}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {notifications.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Check className="h-12 w-12 mx-auto text-green-500" />
+                      <p className="mt-2">No active alerts</p>
+                      <p className="text-sm">All systems operating normally</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+// Custom Icon Components
+const SunIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
+const BarChartIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+export default JakSolarHeartDashboard;
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
   BarChart as RechartsBarChart,
   Bar
 } from "recharts";
@@ -471,6 +1418,500 @@ const BarChartIcon = ({ className }: { className?: string }) => (
 );
 
 export default JakSolarHeartDashboard;
-Share
-Refresh
-Copy
+firebase login
+   firebase init hosting
+   ```
+3. **Build your project**:
+   ```bash
+   npm run build
+   ```
+4. **Deploy**:
+   ```bash
+   firebase deploy
+   ```
+
+## Prerequisites for Deployment
+
+Make sure your project has:
+1. **Package.json** with build scripts
+2. **Proper file structure** (pages directory for Next.js)
+3. **All dependencies** listed in package.json
+
+## Quick Setup for Next.js Deployment
+
+If you haven't set up your project structure yet:
+
+1. **Create project structure**:
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  BarChart as RechartsBarChart,
+  Bar
+} from "recharts";
+import { 
+  Users, 
+  Shield, 
+  Clock, 
+  Play, 
+  Home, 
+  Search, 
+  Menu, 
+  User, 
+  Settings, 
+  Bell, 
+  Calendar,
+  Star,
+  Upload,
+  Download,
+  Trash,
+  Edit,
+  Plus,
+  Minus,
+  Check,
+  X,
+  ArrowRight
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+// Types
+type UserRole = 'ADMIN' | 'OPERATION' | 'TECHNICAL' | 'VIEWER';
+type PlantStatus = 'operational' | 'warning' | 'critical' | 'offline';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  lastLogin: string;
+}
+
+interface Plant {
+  id: string;
+  name: string;
+  location: string;
+  capacity: number; // in MW
+  status: PlantStatus;
+  lastUpdated: string;
+}
+
+interface EnergyDataPoint {
+  time: string;
+  power: number;
+  irradiance: number;
+  temperature: number;
+  windSpeed: number;
+}
+
+interface KPI {
+  name: string;
+  value: number;
+  unit: string;
+  change: number;
+  icon: React.ReactNode;
+}
+
+interface Alert {
+  id: string;
+  type: 'warning' | 'critical' | 'info';
+  title: string;
+  description: string;
+  time: string;
+  plantId: string;
+}
+
+// Mock data
+const mockUsers: User[] = [
+  { id: '1', name: 'Shashank Mani', email: 'shashank@admin.com', role: 'ADMIN', lastLogin: '2023-05-15 14:30' },
+  { id: '2', name: 'Sarah Operator', email: 'sarah@operation.com', role: 'OPERATION', lastLogin: '2023-05-15 10:15' },
+  { id: '3', name: 'Mike Technician', email: 'mike@technical.com', role: 'TECHNICAL', lastLogin: '2023-05-15 16:45' },
+  { id: '4', name: 'Alex Viewer', email: 'alex@viewer.com', role: 'VIEWER', lastLogin: '2023-05-15 09:20' },
+];
+
+const mockPlants: Plant[] = [
+  { id: '1', name: 'Solar Farm Alpha', location: 'California', capacity: 50, status: 'operational', lastUpdated: '2023-05-15 15:30' },
+  { id: '2', name: 'Solar Farm Beta', location: 'Nevada', capacity: 75, status: 'warning', lastUpdated: '2023-05-15 15:25' },
+  { id: '3', name: 'Solar Farm Gamma', location: 'Arizona', capacity: 100, status: 'operational', lastUpdated: '2023-05-15 15:35' },
+  { id: '4', name: 'Solar Farm Delta', location: 'Texas', capacity: 120, status: 'critical', lastUpdated: '2023-05-15 15:10' },
+];
+
+const mockEnergyData: EnergyDataPoint[] = [
+  { time: '06:00', power: 0, irradiance: 0, temperature: 15, windSpeed: 3 },
+  { time: '08:00', power: 15, irradiance: 200, temperature: 18, windSpeed: 4 },
+  { time: '10:00', power: 45, irradiance: 600, temperature: 22, windSpeed: 5 },
+  { time: '12:00', power: 75, irradiance: 900, temperature: 28, windSpeed: 6 },
+  { time: '14:00', power: 90, irradiance: 1000, temperature: 32, windSpeed: 7 },
+  { time: '16:00', power: 60, irradiance: 700, temperature: 30, windSpeed: 6 },
+  { time: '18:00', power: 15, irradiance: 200, temperature: 25, windSpeed: 4 },
+  { time: '20:00', power: 0, irradiance: 0, temperature: 20, windSpeed: 3 },
+];
+
+const mockKPIs: KPI[] = [
+  { name: 'Capacity Utilization Factor', value: 18.5, unit: '%', change: 2.3, icon: <Star className="h-5 w-5" /> },
+  { name: 'Performance Ratio', value: 82.4, unit: '%', change: -1.2, icon: <Play className="h-5 w-5" /> },
+  { name: 'Availability', value: 98.7, unit: '%', change: 0.5, icon: <Clock className="h-5 w-5" /> },
+  { name: 'Grid Uptime', value: 99.9, unit: '%', change: 0.1, icon: <Shield className="h-5 w-5" /> },
+];
+
+const mockAlerts: Alert[] = [
+  { id: '1', type: 'warning', title: 'Inverter Performance Drop', description: 'Inverter INV-04 showing 15% below expected performance', time: '15:22', plantId: '2' },
+  { id: '2', type: 'critical', title: 'Grid Connection Lost', description: 'Plant Gamma lost grid connection for 12 minutes', time: '14:45', plantId: '3' },
+  { id: '3', type: 'info', title: 'Maintenance Scheduled', description: 'Routine maintenance for Plant Alpha next week', time: '10:30', plantId: '1' },
+];
+
+const JakSolarHeartDashboard = () => {
+  const [currentUser, setCurrentUser] = useState<User>(mockUsers[0]);
+  const [selectedPlant, setSelectedPlant] = useState<string>('all');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [notifications, setNotifications] = useState<Alert[]>(mockAlerts);
+
+  // Filter plants based on selection
+  const filteredPlants = selectedPlant === 'all' 
+    ? mockPlants 
+    : mockPlants.filter(plant => plant.id === selectedPlant);
+
+  // Filter energy data for selected plant
+  const plantEnergyData = selectedPlant === 'all' 
+    ? mockEnergyData 
+    : mockEnergyData.map(point => ({ ...point, power: point.power * 0.8 })); // Simulate different plant data
+
+  // Handle notification dismissal
+  const dismissNotification = (id: string) => {
+    setNotifications(notifications.filter(alert => alert.id !== id));
+  };
+
+  // Simulate real-time data updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // In a real app, this would fetch new data
+      console.log('Fetching real-time data...');
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex min-h-screen bg-gray-50">
+      {/* Sidebar */}
+      <div className={`bg-white shadow-md transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center space-x-3">
+            <div className="bg-green-500 rounded-lg p-2">
+              <SunIcon className="h-6 w-6 text-white" />
+            </div>
+            {sidebarOpen && (
+              <h1 className="text-xl font-bold text-gray-800">Jak Solar Heart</h1>
+            )}
+          </div>
+        </div>
+        
+        <nav className="p-4">
+          <ul className="space-y-2">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: <Home className="h-5 w-5" /> },
+              { id: 'plants', label: 'Plants', icon: <Play className="h-5 w-5" /> },
+              { id: 'analytics', label: 'Analytics', icon: <BarChartIcon className="h-5 w-5" /> },
+              { id: 'reports', label: 'Reports', icon: <Upload className="h-5 w-5" /> },
+              { id: 'users', label: 'Users', icon: <Users className="h-5 w-5" /> },
+              { id: 'settings', label: 'Settings', icon: <Settings className="h-5 w-5" /> },
+            ].map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center w-full p-3 rounded-lg transition-colors ${
+                    activeTab === item.id 
+                      ? 'bg-green-100 text-green-700' 
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {item.icon}
+                  {sidebarOpen && <span className="ml-3">{item.label}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+        
+        <div className="absolute bottom-0 w-full p-4 border-t">
+          <div className="flex items-center">
+            <Avatar>
+              <AvatarImage src="https://github.com/shadcn.png" />
+              <AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            {sidebarOpen && (
+              <div className="ml-3">
+                <p className="text-sm font-medium">{currentUser.name}</p>
+                <p className="text-xs text-gray-500">{currentUser.role}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="bg-white shadow-sm">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center">
+              <button 
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 rounded-md text-gray-600 hover:bg-gray-100"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <h2 className="ml-4 text-xl font-semibold text-gray-800 capitalize">
+                {activeTab} {activeTab === 'dashboard' && 'Overview'}
+              </h2>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Bell className="h-6 w-6 text-gray-600" />
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    {notifications.length}
+                  </span>
+                )}
+              </div>
+              
+              <Select value={selectedPlant} onValueChange={setSelectedPlant}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Select Plant" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plants</SelectItem>
+                  {mockPlants.map(plant => (
+                    <SelectItem key={plant.id} value={plant.id}>
+                      {plant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export Report
+              </Button>
+            </div>
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        <main className="flex-1 overflow-y-auto p-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {mockKPIs.map((kpi, index) => (
+              <Card key={index} className="border-l-4 border-l-green-500">
+                <CardHeader className="pb-2">
+                  <CardDescription className="flex items-center">
+                    {kpi.icon}
+                    <span className="ml-2">{kpi.name}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold">
+                    {kpi.value}
+                    <span className="text-lg text-gray-500 ml-1">{kpi.unit}</span>
+                  </div>
+                  <p className={`text-sm mt-1 ${kpi.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {kpi.change >= 0 ? '↑' : '↓'} {Math.abs(kpi.change)}% from yesterday
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Power Generation Chart */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Real-Time Power Generation</CardTitle>
+                <CardDescription>Current power output across all plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="power" 
+                        stroke="#10B981" 
+                        strokeWidth={2} 
+                        activeDot={{ r: 8 }} 
+                        name="Power (MW)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Weather Conditions */}
+            <Card className="col-span-1">
+              <CardHeader>
+                <CardTitle>Environmental Conditions</CardTitle>
+                <CardDescription>Current weather data for selected plant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsBarChart data={plantEnergyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="time" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip />
+                      <Legend />
+                      <Bar 
+                        yAxisId="left"
+                        dataKey="irradiance" 
+                        fill="#F59E0B" 
+                        name="Irradiance (W/m²)"
+                      />
+                      <Bar 
+                        yAxisId="right"
+                        dataKey="temperature" 
+                        fill="#3B82F6" 
+                        name="Temperature (°C)"
+                      />
+                    </RechartsBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Plant Status and Alerts */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Plant Status */}
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Plant Status Overview</CardTitle>
+                <CardDescription>Current operational status of all solar plants</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {filteredPlants.map(plant => (
+                    <div 
+                      key={plant.id} 
+                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50"
+                    >
+                      <div className="flex items-center">
+                        <div className={`h-3 w-3 rounded-full mr-3 ${
+                          plant.status === 'operational' ? 'bg-green-500' :
+                          plant.status === 'warning' ? 'bg-yellow-500' :
+                          plant.status === 'critical' ? 'bg-red-500' : 'bg-gray-500'
+                        }`}></div>
+                        <div>
+                          <h3 className="font-medium">{plant.name}</h3>
+                          <p className="text-sm text-gray-500">{plant.location} • {plant.capacity} MW</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium capitalize">{plant.status}</p>
+                        <p className="text-xs text-gray-500">Updated: {plant.lastUpdated}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Alerts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>System Alerts</CardTitle>
+                <CardDescription>Recent notifications and warnings</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {notifications.map(alert => (
+                    <div 
+                      key={alert.id} 
+                      className={`p-4 rounded-lg border-l-4 ${
+                        alert.type === 'warning' ? 'border-l-yellow-500 bg-yellow-50' :
+                        alert.type === 'critical' ? 'border-l-red-500 bg-red-50' :
+                        'border-l-blue-500 bg-blue-50'
+                      }`}
+                    >
+                      <div className="flex justify-between">
+                        <h3 className="font-medium">{alert.title}</h3>
+                        <button 
+                          onClick={() => dismissNotification(alert.id)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-sm mt-1">{alert.description}</p>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-xs text-gray-500">{alert.time}</span>
+                        <span className="text-xs font-medium">
+                          {mockPlants.find(p => p.id === alert.plantId)?.name}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {notifications.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      <Check className="h-12 w-12 mx-auto text-green-500" />
+                      <p className="mt-2">No active alerts</p>
+                      <p className="text-sm">All systems operating normally</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+// Custom Icon Components
+const SunIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+  </svg>
+);
+
+const BarChartIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+  </svg>
+);
+
+export default JakSolarHeartDashboard;
